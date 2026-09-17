@@ -6,7 +6,6 @@ import tech.kayys.wayang.tools.spi.ToolResult;
 import tech.kayys.wayang.memory.model.Memory;
 import tech.kayys.wayang.memory.service.VectorMemoryStore;
 import tech.kayys.wayang.memory.service.InMemoryVectorStore;
-import tech.kayys.wayang.memory.service.FaissRocksDBMemoryStore;
 import tech.kayys.wayang.vector.faiss.FaissVectorStore;
 
 import java.io.File;
@@ -16,14 +15,6 @@ import java.util.Map;
 public class WayangMemoryAgentTools {
 
     private static VectorMemoryStore getStore() {
-        String strategy = System.getProperty("wayang.memory.storage.strategy", "local");
-        if ("local".equalsIgnoreCase(strategy)) {
-            String faissPath = System.getProperty("user.home") + "/.wayang/data/memory-faiss";
-            String rocksDbPath = System.getProperty("user.home") + "/.wayang/data/memory-rocksdb";
-            new File(System.getProperty("user.home") + "/.wayang/data").mkdirs();
-            FaissVectorStore faissStore = new FaissVectorStore(1536, "Flat", faissPath);
-            return new FaissRocksDBMemoryStore(faissStore, rocksDbPath);
-        }
         return new InMemoryVectorStore();
     }
 
