@@ -19,12 +19,11 @@
   <!-- ═══════════════════════════════════════════════════════════ -->
   <artifactId>wayang-runtime-core</artifactId>
   <packaging>jar</packaging>
-  <name>Gollek Agent Core</name>
+  <name>Wayang Runtime Core</name>
   <description>
-    Service Provider Interface for the Gollek Agent framework.
-    Contains AgentSkill, AgentOrchestrator, AgentMemory, SkillRegistry,
-    SkillContext, SkillResult, AgentEvent and supporting value types.
-    No CDI or Quarkus dependencies — suitable as a compile-time-only dependency.
+    Core execution runtime for Wayang Agents, Workflows, and Skills.
+    Provides execution engine, ReAct loop, coordination, lifecycle management,
+    and bridges to the Wayang Harness governance and checkpoint substrate.
   </description>
 
     <properties>
@@ -167,6 +166,12 @@
 
     <dependency>
       <groupId>tech.kayys.wayang</groupId>
+      <artifactId>wayang-harness</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>tech.kayys.wayang</groupId>
       <artifactId>wayang-plugin-spi</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -233,12 +238,6 @@
     <!-- Lombok -->
 
     <!-- Tool Integration -->
-    <dependency>
-      <groupId>tech.kayys.wayang</groupId>
-      <artifactId>wayang-tool</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
     <dependency>
       <groupId>tech.kayys.wayang</groupId>
       <artifactId>wayang-tool-core</artifactId>
@@ -318,6 +317,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.2</version>
         <configuration>
           <excludes>
             <exclude>**/agent/core/**</exclude>

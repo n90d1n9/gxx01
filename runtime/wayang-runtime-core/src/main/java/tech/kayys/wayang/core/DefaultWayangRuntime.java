@@ -12,8 +12,8 @@ import jakarta.inject.Inject;
 import tech.kayys.wayang.agent.AgentRequest;
 import tech.kayys.wayang.agent.AgentResponse;
 import tech.kayys.wayang.core.runtime.WayangRuntime;
-import tech.kayys.wayang.execution.DefaultExecutionEngine;
 import tech.kayys.wayang.execution.ExecutionContext;
+import tech.kayys.wayang.execution.ExecutionEngine;
 import tech.kayys.wayang.execution.ExecutionResult;
 import tech.kayys.wayang.execution.SimpleExecutionContext;
 import tech.kayys.wayang.extension.Id;
@@ -58,7 +58,11 @@ public class DefaultWayangRuntime extends BaseResource implements WayangRuntime 
     }
 
     @Inject
-    DefaultExecutionEngine executionEngine;
+    ExecutionEngine executionEngine;
+
+    public void setExecutionEngine(ExecutionEngine executionEngine) {
+        this.executionEngine = executionEngine;
+    }
 
     // -------------------------------------------------------------------------
     // WayangRuntime
