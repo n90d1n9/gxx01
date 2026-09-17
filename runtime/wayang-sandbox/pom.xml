@@ -20,6 +20,16 @@
     <!-- Core dependencies -->
     <dependency>
       <groupId>tech.kayys.wayang</groupId>
+      <artifactId>wayang-spi</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>tech.kayys.wayang</groupId>
+      <artifactId>wayang-harness</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>tech.kayys.wayang</groupId>
       <artifactId>wayang-extension</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -32,8 +42,8 @@
 
     <!-- Testing -->
     <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
