@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
       <parent>
         <groupId>tech.kayys.wayang</groupId>
-        <artifactId>wayang-agentic-parent</artifactId>
+        <artifactId>wayang-parent</artifactId>
         <version>0.0.1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>

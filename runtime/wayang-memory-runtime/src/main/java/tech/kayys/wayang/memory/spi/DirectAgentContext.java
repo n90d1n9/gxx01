@@ -7,7 +7,7 @@ import java.util.Optional;
 
 /**
  * Interface for Direct (Native/Zero-Copy) Agent Context management.
- * This interacts directly with the off-heap UnifiedMemoryStore from Aljabr
+ * Interacts directly with off-heap native memory
  * to ensure that agent contexts (e.g. KV caches or large context windows)
  * are natively available for the FFM pipeline without Java String serialization.
  */
