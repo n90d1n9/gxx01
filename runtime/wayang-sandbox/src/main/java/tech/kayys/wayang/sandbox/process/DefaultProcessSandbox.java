@@ -2,6 +2,7 @@ package tech.kayys.wayang.sandbox.process;
 
 import tech.kayys.wayang.extension.Version;
 import tech.kayys.wayang.sandbox.filesystem.DefaultSandboxFilesystem;
+import tech.kayys.wayang.sandbox.runtime.AbstractSandbox;
 import tech.kayys.wayang.spi.sandbox.*;
 
 import java.io.ByteArrayOutputStream;
@@ -15,20 +16,15 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
-public final class DefaultProcessSandbox implements ProcessSandbox {
+public final class DefaultProcessSandbox extends AbstractSandbox implements ProcessSandbox {
 
     private final String sandboxId;
     private final SandboxRequest request;
     private final Path workspace;
     private final Path inputDirectory;
     private final Path outputDirectory;
-    private final Instant createdAt;
     private final SandboxFilesystem filesystem;
-
-    private final AtomicReference<SandboxState> state =
-            new AtomicReference<>(SandboxState.CREATED);
 
     private final ExecutorService ioExecutor =
             Executors.newVirtualThreadPerTaskExecutor();
@@ -42,12 +38,13 @@ public final class DefaultProcessSandbox implements ProcessSandbox {
             Path inputDirectory,
             Path outputDirectory) {
 
+        super(createDescriptor(sandboxId), createSandboxContext(sandboxId, request, workspace, inputDirectory, outputDirectory));
+
         this.sandboxId = Objects.requireNonNull(sandboxId, "sandboxId");
         this.request = Objects.requireNonNull(request, "request");
         this.workspace = Objects.requireNonNull(workspace, "workspace");
         this.inputDirectory = Objects.requireNonNull(inputDirectory, "inputDirectory");
         this.outputDirectory = Objects.requireNonNull(outputDirectory, "outputDirectory");
-        this.createdAt = Instant.now();
 
         List<FilesystemRoot> roots = List.of(
                 new FilesystemRoot("workspace", workspace, FilesystemAccess.READ_WRITE, false),
@@ -57,8 +54,7 @@ public final class DefaultProcessSandbox implements ProcessSandbox {
         this.filesystem = new DefaultSandboxFilesystem(FilesystemSandboxPolicy.strict(roots));
     }
 
-    @Override
-    public SandboxDescriptor descriptor() {
+    private static SandboxDescriptor createDescriptor(String sandboxId) {
         return new SandboxDescriptor(
                 sandboxId,
                 "Process Sandbox",
@@ -73,21 +69,21 @@ public final class DefaultProcessSandbox implements ProcessSandbox {
         );
     }
 
-    @Override
-    public SandboxState state() {
-        return state.get();
-    }
+    private static SandboxContext createSandboxContext(
+            String sandboxId,
+            SandboxRequest request,
+            Path workspace,
+            Path inputDirectory,
+            Path outputDirectory) {
 
-    @Override
-    public SandboxContext context() {
         return new DefaultProcessSandboxContext(
                 sandboxId,
                 request,
-                descriptor(),
+                createDescriptor(sandboxId),
                 workspace,
                 inputDirectory,
                 outputDirectory,
-                createdAt
+                Instant.now()
         );
     }
 
@@ -97,53 +93,34 @@ public final class DefaultProcessSandbox implements ProcessSandbox {
     }
 
     @Override
-    public void start() {
-        transition(SandboxState.CREATED, SandboxState.STARTING);
-        state.set(SandboxState.RUNNING);
+    protected void doStart() throws Exception {
+        // Ensure directories exist
+        Files.createDirectories(workspace);
+        Files.createDirectories(inputDirectory);
+        Files.createDirectories(outputDirectory);
     }
 
     @Override
-    public void stop() {
-        SandboxState current = state.get();
-        if (current == SandboxState.STOPPED || current == SandboxState.DESTROYED) {
-            return;
-        }
-
-        if (current != SandboxState.RUNNING && current != SandboxState.STARTING) {
-            return;
-        }
-
-        state.set(SandboxState.STOPPING);
-
+    protected void doStop() throws Exception {
         Process active = currentProcess;
         if (active != null && active.isAlive()) {
             terminateProcessTree(active);
         }
-
-        state.set(SandboxState.STOPPED);
     }
 
     @Override
-    public void destroy() throws Exception {
-        SandboxState current = state.get();
-        if (current != SandboxState.STOPPED && current != SandboxState.CREATED && current != SandboxState.FAILED) {
-            stop();
-        }
-
-        if (current != SandboxState.DESTROYED) {
-            deleteWorkspace(workspace);
-            ioExecutor.close();
-            state.set(SandboxState.DESTROYED);
-        }
+    protected void doDestroy() throws Exception {
+        deleteWorkspace(workspace);
+        ioExecutor.close();
     }
 
     @Override
     public CompletableFuture<ProcessExecutionResult> execute(ProcessExecutionRequest executionRequest) {
         Objects.requireNonNull(executionRequest, "executionRequest");
 
-        if (state.get() != SandboxState.RUNNING) {
+        if (state() != SandboxState.RUNNING) {
             return CompletableFuture.failedFuture(
-                    new IllegalStateException("Sandbox is not running: " + state.get()));
+                    new IllegalStateException("Sandbox is not running: " + state()));
         }
 
         return CompletableFuture.supplyAsync(() -> executeBlocking(executionRequest), ioExecutor);
@@ -285,12 +262,6 @@ public final class DefaultProcessSandbox implements ProcessSandbox {
                             throw new UncheckedIOException(e);
                         }
                     });
-        }
-    }
-
-    private void transition(SandboxState expected, SandboxState next) {
-        if (!state.compareAndSet(expected, next)) {
-            throw new IllegalStateException("Invalid sandbox transition: " + state.get() + " -> " + next);
         }
     }
 }

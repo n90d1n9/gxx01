@@ -27,6 +27,11 @@ public final class DefaultSandboxFilesystem implements SandboxFilesystem {
     }
 
     @Override
+    public List<FilesystemRoot> roots() {
+        return List.copyOf(roots.values());
+    }
+
+    @Override
     public Optional<FilesystemRoot> root(String rootId) {
         return Optional.ofNullable(roots.get(rootId));
     }
