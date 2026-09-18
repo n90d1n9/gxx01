@@ -55,10 +55,47 @@ class LocalProcessSandboxTest {
     void testLocalSandboxProvider() throws Exception {
         LocalSandboxProvider provider = new LocalSandboxProvider();
         assertEquals("local", provider.getProviderId());
+        assertEquals("local", provider.providerId());
+        assertNotNull(provider.descriptor());
+        assertTrue(provider.descriptor().supports(tech.kayys.wayang.spi.sandbox.SandboxType.PROCESS));
 
         SandboxConfiguration config = new SandboxConfiguration();
         try (var s = provider.createSandbox(config)) {
             assertNotNull(s);
         }
+
+        // Test Phase 4.1 create(SandboxRequest)
+        tech.kayys.wayang.spi.sandbox.SandboxRequest req = new tech.kayys.wayang.spi.sandbox.SandboxRequest(
+                "req-sb-1",
+                tech.kayys.wayang.spi.sandbox.SandboxType.PROCESS,
+                java.util.Set.of("process-isolation"),
+                tech.kayys.wayang.spi.sandbox.SandboxLimits.unlimited(),
+                tech.kayys.wayang.spi.sandbox.SandboxFilesystem.empty(),
+                tech.kayys.wayang.spi.sandbox.SandboxNetwork.disabled(),
+                java.util.Map.of("MY_VAR", "my_val"),
+                java.util.Map.of()
+        );
+        try (var s2 = provider.create(req)) {
+            assertNotNull(s2);
+            assertEquals(tech.kayys.wayang.spi.sandbox.SandboxState.CREATED, s2.state());
+            s2.start();
+            assertEquals(tech.kayys.wayang.spi.sandbox.SandboxState.RUNNING, s2.state());
+            assertNotNull(s2.descriptor());
+            assertEquals("req-sb-1", s2.descriptor().id());
+            assertNotNull(s2.context());
+            assertTrue(s2.context().workspace().isPresent());
+        }
+    }
+
+    @Test
+    void testDescriptorAndLifecycle() throws Exception {
+        assertNotNull(sandbox.descriptor());
+        assertEquals(tech.kayys.wayang.spi.sandbox.SandboxType.PROCESS, sandbox.descriptor().type());
+        assertEquals(tech.kayys.wayang.spi.sandbox.SandboxState.RUNNING, sandbox.state());
+        assertNotNull(sandbox.context());
+        assertTrue(sandbox.context().workspace().isPresent());
+
+        sandbox.destroy();
+        assertEquals(tech.kayys.wayang.spi.sandbox.SandboxState.DESTROYED, sandbox.state());
     }
 }

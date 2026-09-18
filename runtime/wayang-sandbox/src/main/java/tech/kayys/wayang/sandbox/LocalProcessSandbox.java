@@ -1,8 +1,7 @@
 package tech.kayys.wayang.sandbox;
 
-import tech.kayys.wayang.spi.sandbox.Sandbox;
-import tech.kayys.wayang.spi.sandbox.SandboxConfiguration;
-import tech.kayys.wayang.spi.sandbox.SandboxExecutionResult;
+import tech.kayys.wayang.extension.Version;
+import tech.kayys.wayang.spi.sandbox.*;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -11,8 +10,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.Map;
+import java.time.Instant;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -21,39 +20,135 @@ import java.util.concurrent.TimeUnit;
  */
 public class LocalProcessSandbox implements Sandbox {
 
+    private final String sandboxId;
     private final Path workingDir;
     private final Map<String, String> envVars;
     private final boolean autoDeleteOnClose;
-    private volatile boolean started = false;
+    private final SandboxDescriptor descriptor;
+    private final SandboxContext context;
+    private volatile SandboxState state = SandboxState.CREATED;
 
     public LocalProcessSandbox(SandboxConfiguration config) throws IOException {
-        if (config != null && config.getWorkingDirectory() != null && !config.getWorkingDirectory().isBlank()) {
-            this.workingDir = Path.of(config.getWorkingDirectory()).toAbsolutePath().normalize();
-            this.autoDeleteOnClose = false;
-        } else {
-            this.workingDir = Files.createTempDirectory("wayang-sandbox-");
-            this.autoDeleteOnClose = true;
-        }
-        this.envVars = config != null && config.getEnvironmentVariables() != null
-                ? Map.copyOf(config.getEnvironmentVariables())
-                : Map.of();
+        this(
+                config != null && config.getWorkingDirectory() != null && !config.getWorkingDirectory().isBlank()
+                        ? Path.of(config.getWorkingDirectory())
+                        : Files.createTempDirectory("wayang-sandbox-"),
+                config != null && config.getEnvironmentVariables() != null
+                        ? config.getEnvironmentVariables()
+                        : Map.of(),
+                config == null || config.getWorkingDirectory() == null || config.getWorkingDirectory().isBlank(),
+                UUID.randomUUID().toString()
+        );
+    }
+
+    public LocalProcessSandbox(SandboxRequest request) throws IOException {
+        this(
+                Files.createTempDirectory("wayang-sandbox-"),
+                request != null ? request.environment() : Map.of(),
+                true,
+                request != null && request.sandboxId() != null ? request.sandboxId() : UUID.randomUUID().toString()
+        );
     }
 
     public LocalProcessSandbox(Path workingDir, Map<String, String> envVars, boolean autoDeleteOnClose) {
+        this(workingDir, envVars, autoDeleteOnClose, UUID.randomUUID().toString());
+    }
+
+    public LocalProcessSandbox(Path workingDir, Map<String, String> envVars, boolean autoDeleteOnClose, String sandboxId) {
+        this.sandboxId = sandboxId;
         this.workingDir = workingDir.toAbsolutePath().normalize();
         this.envVars = envVars != null ? Map.copyOf(envVars) : Map.of();
         this.autoDeleteOnClose = autoDeleteOnClose;
+
+        this.descriptor = new SandboxDescriptor(
+                sandboxId,
+                "Local Process Sandbox",
+                "Local OS process isolated environment",
+                SandboxType.PROCESS,
+                Version.parse("1.0.0"),
+                Set.of("process-isolation", "filesystem-isolation"),
+                Map.of("workingDirectory", this.workingDir.toString())
+        );
+
+        Instant created = Instant.now();
+        this.context = new SandboxContext() {
+            @Override
+            public String sandboxId() {
+                return sandboxId;
+            }
+
+            @Override
+            public String executionId() {
+                return sandboxId;
+            }
+
+            @Override
+            public Optional<String> tenantId() {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<String> agentId() {
+                return Optional.empty();
+            }
+
+            @Override
+            public SandboxDescriptor descriptor() {
+                return descriptor;
+            }
+
+            @Override
+            public Optional<Path> workspace() {
+                return Optional.of(workingDir);
+            }
+
+            @Override
+            public Optional<Path> inputDirectory() {
+                return Optional.of(workingDir.resolve("input"));
+            }
+
+            @Override
+            public Optional<Path> outputDirectory() {
+                return Optional.of(workingDir.resolve("output"));
+            }
+
+            @Override
+            public Instant createdAt() {
+                return created;
+            }
+
+            @Override
+            public Map<String, Object> attributes() {
+                return Map.of();
+            }
+        };
     }
 
     @Override
-    public void start() throws Exception {
+    public SandboxDescriptor descriptor() {
+        return descriptor;
+    }
+
+    @Override
+    public SandboxState state() {
+        return state;
+    }
+
+    @Override
+    public SandboxContext context() {
+        return context;
+    }
+
+    @Override
+    public synchronized void start() throws Exception {
+        state = SandboxState.STARTING;
         Files.createDirectories(workingDir);
-        this.started = true;
+        state = SandboxState.RUNNING;
     }
 
     @Override
-    public void stop() throws Exception {
-        this.started = false;
+    public synchronized void stop() throws Exception {
+        state = SandboxState.STOPPING;
         if (autoDeleteOnClose && Files.exists(workingDir)) {
             try (var stream = Files.walk(workingDir)) {
                 stream.sorted(Comparator.reverseOrder())
@@ -61,6 +156,13 @@ public class LocalProcessSandbox implements Sandbox {
                         .forEach(File::delete);
             }
         }
+        state = SandboxState.STOPPED;
+    }
+
+    @Override
+    public synchronized void destroy() throws Exception {
+        stop();
+        state = SandboxState.DESTROYED;
     }
 
     @Override
@@ -125,10 +227,11 @@ public class LocalProcessSandbox implements Sandbox {
     }
 
     private void ensureStarted() throws IllegalStateException {
-        if (!started) {
+        if (state != SandboxState.RUNNING) {
             try {
                 start();
             } catch (Exception e) {
+                state = SandboxState.FAILED;
                 throw new IllegalStateException("Failed to auto-start sandbox: " + e.getMessage(), e);
             }
         }
