@@ -45,7 +45,7 @@
     </dependency>
     <dependency>
       <groupId>tech.kayys.wayang</groupId>
-      <artifactId>wayang-plugin</artifactId>
+      <artifactId>wayang-plugin-spi</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
