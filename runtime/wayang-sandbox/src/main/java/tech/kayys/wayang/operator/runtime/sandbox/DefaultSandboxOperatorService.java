@@ -1,9 +1,11 @@
 package tech.kayys.wayang.operator.runtime.sandbox;
 
+import tech.kayys.wayang.operator.runtime.PermissiveOperatorAuthorization;
+import tech.kayys.wayang.spi.operator.OperatorAuthorization;
 import tech.kayys.wayang.spi.operator.OperatorContext;
 import tech.kayys.wayang.spi.operator.OperatorResult;
 import tech.kayys.wayang.spi.operator.OperatorService;
-import tech.kayys.wayang.spi.operator.sandbox.SandboxOperatorService;
+import tech.kayys.wayang.spi.operator.sandbox.*;
 import tech.kayys.wayang.spi.sandbox.Sandbox;
 import tech.kayys.wayang.spi.sandbox.SandboxManager;
 
@@ -16,9 +18,15 @@ public class DefaultSandboxOperatorService implements SandboxOperatorService, Op
     public static final String ID = "operator.service.sandbox";
 
     private final SandboxManager sandboxManager;
+    private final OperatorAuthorization authorization;
 
     public DefaultSandboxOperatorService(SandboxManager sandboxManager) {
+        this(sandboxManager, new PermissiveOperatorAuthorization());
+    }
+
+    public DefaultSandboxOperatorService(SandboxManager sandboxManager, OperatorAuthorization authorization) {
         this.sandboxManager = Objects.requireNonNull(sandboxManager, "sandboxManager must not be null");
+        this.authorization = Objects.requireNonNull(authorization, "authorization must not be null");
     }
 
     @Override
@@ -37,7 +45,13 @@ public class DefaultSandboxOperatorService implements SandboxOperatorService, Op
     }
 
     @Override
-    public OperatorResult<List<Sandbox>> list(OperatorContext context) {
+    public OperatorResult<List<SandboxSummary>> list(OperatorContext context) {
+        try {
+            authorization.require(context, SandboxOperatorPermissions.READ);
+        } catch (SecurityException se) {
+            return OperatorResult.failure("PERMISSION_DENIED", se.getMessage());
+        }
+
         try {
             List<Sandbox> sandboxes = sandboxManager.list();
             if (context != null && context.tenantId() != null && !context.tenantId().isBlank()) {
@@ -45,14 +59,23 @@ public class DefaultSandboxOperatorService implements SandboxOperatorService, Op
                         .filter(s -> s.context().tenantId().map(t -> t.equals(context.tenantId())).orElse(false))
                         .toList();
             }
-            return OperatorResult.success(sandboxes);
+            List<SandboxSummary> summaries = sandboxes.stream()
+                    .map(SandboxSummaryMapper::map)
+                    .toList();
+            return OperatorResult.success(summaries);
         } catch (Exception e) {
             return OperatorResult.failure("SANDBOX_LIST_FAILED", e.getMessage());
         }
     }
 
     @Override
-    public OperatorResult<Sandbox> inspect(OperatorContext context, String sandboxId) {
+    public OperatorResult<SandboxSummary> inspect(OperatorContext context, String sandboxId) {
+        try {
+            authorization.require(context, SandboxOperatorPermissions.READ);
+        } catch (SecurityException se) {
+            return OperatorResult.failure("PERMISSION_DENIED", se.getMessage());
+        }
+
         if (sandboxId == null || sandboxId.isBlank()) {
             return OperatorResult.failure("INVALID_ARGUMENT", "sandboxId must not be blank");
         }
@@ -66,11 +89,90 @@ public class DefaultSandboxOperatorService implements SandboxOperatorService, Op
                 return OperatorResult.failure("PERMISSION_DENIED", "Sandbox does not belong to tenant: " + context.tenantId());
             }
         }
-        return OperatorResult.success(s);
+        return OperatorResult.success(SandboxSummaryMapper.map(s));
+    }
+
+    @Override
+    public OperatorResult<SandboxHealthSummary> health(OperatorContext context, String sandboxId) {
+        try {
+            authorization.require(context, SandboxOperatorPermissions.HEALTH);
+        } catch (SecurityException se) {
+            return OperatorResult.failure("PERMISSION_DENIED", se.getMessage());
+        }
+
+        if (sandboxId == null || sandboxId.isBlank()) {
+            return OperatorResult.failure("INVALID_ARGUMENT", "sandboxId must not be blank");
+        }
+        Optional<Sandbox> sb = sandboxManager.find(sandboxId);
+        if (sb.isEmpty()) {
+            return OperatorResult.failure("SANDBOX_NOT_FOUND", "No sandbox found with ID: " + sandboxId);
+        }
+        return OperatorResult.success(SandboxSummaryMapper.mapHealth(sb.get()));
+    }
+
+    @Override
+    public OperatorResult<SandboxMetricsSummary> metrics(OperatorContext context, String sandboxId) {
+        try {
+            authorization.require(context, SandboxOperatorPermissions.METRICS);
+        } catch (SecurityException se) {
+            return OperatorResult.failure("PERMISSION_DENIED", se.getMessage());
+        }
+
+        if (sandboxId == null || sandboxId.isBlank()) {
+            return OperatorResult.failure("INVALID_ARGUMENT", "sandboxId must not be blank");
+        }
+        Optional<Sandbox> sb = sandboxManager.find(sandboxId);
+        if (sb.isEmpty()) {
+            return OperatorResult.failure("SANDBOX_NOT_FOUND", "No sandbox found with ID: " + sandboxId);
+        }
+        return OperatorResult.success(SandboxSummaryMapper.mapMetrics(sb.get()));
+    }
+
+    @Override
+    public OperatorResult<SandboxDiagnosticsSummary> diagnostics(OperatorContext context, String sandboxId) {
+        try {
+            authorization.require(context, SandboxOperatorPermissions.DIAGNOSTICS);
+        } catch (SecurityException se) {
+            return OperatorResult.failure("PERMISSION_DENIED", se.getMessage());
+        }
+
+        if (sandboxId == null || sandboxId.isBlank()) {
+            return OperatorResult.failure("INVALID_ARGUMENT", "sandboxId must not be blank");
+        }
+        Optional<Sandbox> sb = sandboxManager.find(sandboxId);
+        if (sb.isEmpty()) {
+            return OperatorResult.failure("SANDBOX_NOT_FOUND", "No sandbox found with ID: " + sandboxId);
+        }
+        return OperatorResult.success(SandboxSummaryMapper.mapDiagnostics(sb.get()));
+    }
+
+    @Override
+    public OperatorResult<Void> stop(OperatorContext context, String sandboxId) {
+        try {
+            authorization.require(context, SandboxOperatorPermissions.STOP);
+        } catch (SecurityException se) {
+            return OperatorResult.failure("PERMISSION_DENIED", se.getMessage());
+        }
+
+        if (sandboxId == null || sandboxId.isBlank()) {
+            return OperatorResult.failure("INVALID_ARGUMENT", "sandboxId must not be blank");
+        }
+        try {
+            sandboxManager.stop(sandboxId);
+            return OperatorResult.success(null);
+        } catch (Exception e) {
+            return OperatorResult.failure("SANDBOX_STOP_FAILED", e.getMessage());
+        }
     }
 
     @Override
     public OperatorResult<Void> destroy(OperatorContext context, String sandboxId) {
+        try {
+            authorization.require(context, SandboxOperatorPermissions.DESTROY);
+        } catch (SecurityException se) {
+            return OperatorResult.failure("PERMISSION_DENIED", se.getMessage());
+        }
+
         if (sandboxId == null || sandboxId.isBlank()) {
             return OperatorResult.failure("INVALID_ARGUMENT", "sandboxId must not be blank");
         }

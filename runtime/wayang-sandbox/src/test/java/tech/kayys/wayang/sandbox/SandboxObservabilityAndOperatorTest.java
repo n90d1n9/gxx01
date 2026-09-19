@@ -107,14 +107,14 @@ class SandboxObservabilityAndOperatorTest {
         OperatorContext ctx = new OperatorContext("tenant-1", "admin", "corr-1", "req-1", Map.of());
 
         // List
-        OperatorResult<List<Sandbox>> listResult = operatorService.list(ctx);
+        OperatorResult<List<tech.kayys.wayang.spi.operator.sandbox.SandboxSummary>> listResult = operatorService.list(ctx);
         assertTrue(listResult instanceof OperatorResult.Success);
-        assertEquals(1, ((OperatorResult.Success<List<Sandbox>>) listResult).value().size());
+        assertEquals(1, ((OperatorResult.Success<List<tech.kayys.wayang.spi.operator.sandbox.SandboxSummary>>) listResult).value().size());
 
         // Inspect
-        OperatorResult<Sandbox> inspectResult = operatorService.inspect(ctx, "sb-obs-1");
+        OperatorResult<tech.kayys.wayang.spi.operator.sandbox.SandboxSummary> inspectResult = operatorService.inspect(ctx, "sb-obs-1");
         assertTrue(inspectResult instanceof OperatorResult.Success);
-        assertEquals("sb-obs-1", ((OperatorResult.Success<Sandbox>) inspectResult).value().context().sandboxId());
+        assertEquals("sb-obs-1", ((OperatorResult.Success<tech.kayys.wayang.spi.operator.sandbox.SandboxSummary>) inspectResult).value().sandboxId());
 
         // Destroy via operator
         OperatorResult<Void> destroyResult = operatorService.destroy(ctx, "sb-obs-1");
